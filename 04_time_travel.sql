@@ -1,0 +1,65 @@
+USE TALENDTEST;
+USE WAREHOUSE TALEND_XS;
+
+/***** 1.IF NOT SPECIFIED: The standard retention period is 1 day (24 hours) and is automatically 
+         enabled for all Snowflake accounts 
+*****/
+CREATE OR REPLACE TEMPORARY TABLE TEST_NO_EXPLICIT_TIMETRAVEL (
+    row_id NUMBER(38,0) IDENTITY (1,1) NOT NULL,
+    user_name VARCHAR(50) NOT NULL,
+    insert_date DATE DEFAULT CURRENT_DATE() NOT NULL
+)
+
+BEGIN;
+ INSERT INTO TEST_NO_EXPLICIT_TIMETRAVEL (user_name) VALUES ('Luis'),('Barry'),('Shradha');
+COMMIT;
+
+SELECT * FROM TEST_NO_EXPLICIT_TIMETRAVEL;
+
+BEGIN;
+ INSERT INTO TEST_NO_EXPLICIT_TIMETRAVEL (user_name) VALUES ('Other1'),('Other2'),('Other3');
+COMMIT;
+
+SELECT * FROM TEST_NO_EXPLICIT_TIMETRAVEL AT(OFFSET => -60*0.8)
+
+/***** 2.Time Travel allows to drop objects and restore them back again. 
+         Restore dropped objects with no retention period only persists for the 
+         length of the session in which the object was dropped.
+*****/
+DROP TABLE TEST_NO_EXPLICIT_TIMETRAVEL;
+SELECT * FROM TEST_NO_EXPLICIT_TIMETRAVEL;
+UNDROP TABLE TEST_NO_EXPLICIT_TIMETRAVEL;
+
+/***** 3.Specifying the Data Retention Period for an Object, explicit key word DATA_RETENTION_TIME_IN_DAYS up to 90 
+         with Enterprise edition +. TRASIENT tables are the exeption since there is no Fail-Safe for them
+*****/
+CREATE OR REPLACE TABLE TEST_EXPLICIT_TIMETRAVEL (
+    row_id NUMBER(38,0) IDENTITY (1,1) NOT NULL,
+    user_name VARCHAR(50) NOT NULL,
+    insert_date DATE DEFAULT CURRENT_DATE() NOT NULL
+) DATA_RETENTION_TIME_IN_DAYS=3; 
+
+DROP TABLE TEST_EXPLICIT_TIMETRAVEL;
+
+CREATE OR REPLACE TEMPORARY TABLE TEST_EXPLICIT_TIMETRAVEL (row_id NUMBER(38,0) IDENTITY (1,1) NOT NULL) DATA_RETENTION_TIME_IN_DAYS=3;
+CREATE OR REPLACE TRANSIENT TABLE TEST_EXPLICIT_TIMETRAVEL (row_id NUMBER(38,0) IDENTITY (1,1) NOT NULL) DATA_RETENTION_TIME_IN_DAYS=3;
+
+/***** 4. Creating new table from an specific point in time
+*****/
+CREATE OR REPLACE TABLE TEST_NO_EXPLICIT_TIMETRAVEL_2
+SELECT * 
+FROM TEST_NO_EXPLICIT_TIMETRAVEL AT(OFFSET => -60*);
+
+SELECT * FROM TEST_NO_EXPLICIT_TIMETRAVEL_2;
+
+/***** 5. Understanding retention period
+*****/
+
+SHOW TABLES LIKE 'TEST_EXPLICIT_TIMETRAVEL' IN TALENDTEST.PUBLIC;
+
+SELECT * FROM TEST_EXPLICIT_TIMETRAVEL;
+
+ALTER TABLE TEST_EXPLICIT_TIMETRAVEL SET DATA_RETENTION_TIME_IN_DAYS = 0;
+
+DROP TABLE TEST_EXPLICIT_TIMETRAVEL;
+UNDROP TABLE TEST_EXPLICIT_TIMETRAVEL;
