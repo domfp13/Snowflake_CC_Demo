@@ -1,3 +1,6 @@
+-- -*- coding: utf-8 -*-
+-- Created by Luis Enrique Fuentes Plata
+
 /* Creating XSMALL VWH.*/
 
 USE CC_DW;

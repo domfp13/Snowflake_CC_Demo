@@ -1,3 +1,6 @@
+-- -*- coding: utf-8 -*-
+-- Created by Luis Enrique Fuentes Plata
+
 /***** Case 1: Understanding Cloud Services Layer cache *****/
 
 -- Create temporary table 
