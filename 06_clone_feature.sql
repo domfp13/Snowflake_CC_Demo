@@ -54,3 +54,12 @@ SELECT * FROM "TALENDTEST_DEV"."PUBLIC"."NATION_CLONE";
 SELECT * FROM "TALENDTEST"."PUBLIC"."NATION";
 
 ALTER TABLE "TALENDTEST"."PUBLIC"."NATION" SWAP WITH "TALENDTEST_DEV"."PUBLIC"."NATION_CLONE";
+
+/***** 6. It is posible to clone Databases, Schemas, Tables, Streams and Others
+*****/
+CREATE [ OR REPLACE ] { DATABASE | SCHEMA | TABLE | STREAM } [ IF NOT EXISTS ] <object_name>
+  CLONE <source_object_name>
+        [ { AT | BEFORE } ( { TIMESTAMP => <timestamp> | OFFSET => <time_difference> | STATEMENT => <id> } ) ]
+
+CREATE [ OR REPLACE ] { STAGE | FILE FORMAT | SEQUENCE | TASK } [ IF NOT EXISTS ] <object_name>
+  CLONE <source_object_name>
