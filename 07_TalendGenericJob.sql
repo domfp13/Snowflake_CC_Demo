@@ -20,9 +20,12 @@ CREATE OR REPLACE TABLE JOB_MASTER_REFERENCE (
 BEGIN TRANSACTION NAME t01;
 
     INSERT INTO JOB_MASTER_REFERENCE (tables_name) VALUES ('Server');
-    INSERT INTO JOB_MASTER_REFERENCE (tables_name) VALUES ('Incident');
+    INSERT INTO JOB_MASTER_REFERENCE (tables_name) VALUES ('Device_Topology');
     
 COMMIT;
+
+SELECT * FROM JOB_MASTER_REFERENCE;
+SELECT * FROM JOB_SNOWFLAKE_OBJECT_REFERENCE;
 
 SELECT A.id AS id, 
        A.tables_name AS tables_name,
@@ -49,7 +52,9 @@ CREATE OR REPLACE TABLE JOB_MASTER_LOADER (
     end_date TIMESTAMP_NTZ(9)
 );
 
--- This query will be used in Talend to update the current file that is being upload in the metadata table
+TRUNCATE TABLE JOB_MASTER_LOADER;
+SELECT * FROM JOB_MASTER_LOADER;
+
 UPDATE JOB_MASTER_LOADER 
 SET end_date = CURRENT_TIMESTAMP(9) 
 WHERE id = (
@@ -62,7 +67,7 @@ WHERE id = (
 USE SCHEMA LUIS_DATALAKE;
 
 -- creating file format
-CREATE OR REPLACE FILE FORMAT FILE_T_SERVER_STG_S3 
+CREATE OR REPLACE FILE FORMAT FILE_T_STG_S3 
     TYPE = 'JSON' 
     --COMPRESSION = 'AUTO ' 
     ENABLE_OCTAL = FALSE 
@@ -73,11 +78,15 @@ CREATE OR REPLACE FILE FORMAT FILE_T_SERVER_STG_S3
 
 SHOW FILE FORMATS;
 
+--ALTER FILE FORMAT IF EXISTS FILE_T_SERVER_STG_S3 RENAME TO FILE_T_STG_S3;
+
 -- creating stage
 --REMOVE @T_JORDERS_STG;
-CREATE OR REPLACE STAGE T_SERVER_STG_S3 url='s3://luis-s3-talend/'
+CREATE OR REPLACE STAGE T_STG_S3 url='s3://luis-s3-talend/'
   credentials=(aws_key_id='' aws_secret_key='')
-  FILE_FORMAT = FILE_T_SERVER_STG_S3;
+  FILE_FORMAT = FILE_T_STG_S3;
+  
+--ALTER STAGE IF EXISTS T_SERVER_STG_S3 RENAME TO T_STG_S3;
 
 SHOW STAGES;
 
@@ -87,7 +96,13 @@ CREATE OR REPLACE TABLE T_SERVER_STG (
     file_name VARCHAR(100) NOT NULL  
 );
 
-LIST @T_SERVER_STG_S3;
+CREATE OR REPLACE TABLE T_DEVICE_TOPOLOGY_STG (
+    V VARIANT,
+    file_name VARCHAR(100) NOT NULL  
+);
+
+
+LIST @T_STG_S3;
 
 -- Loading data
 BEGIN
@@ -101,17 +116,18 @@ BEGIN
     ON_ERROR = 'skip_file'
     PURGE = FALSE;
     
-   --COPY INTO T_SERVER_STG(V, file_name)
-    --FROM (SELECT t.$1, '<your_text_here>' FROM @T_SERVER_STG_S3 t)
-    --PATTERN = 'Server/2020/11/11/Server_202011061349.json'
-    --ON_ERROR = 'skip_file'
-    --PURGE = FALSE;
+   COPY INTO T_DEVICE_TOPOLOGY_STG(V, file_name)
+    FROM (SELECT t.$1, 'OTHER' FROM @T_STG_S3 t)
+    PATTERN = 'Device_Topology/2020/11/18/Device_Topology_202011181143.json'
+    ON_ERROR = 'skip_file'
+    PURGE = FALSE;
        
 COMMIT;
 
 SELECT * FROM T_SERVER_STG;
+SELECT * FROM T_DEVICE_TOPOLOGY_STG;
 
--- 5.- Creating a Loading table reference table (This creates a data model)
+-- 5.- Creating a Loading table reference table
 USE SCHEMA LUIS_DATALAKE;
 
 CREATE OR REPLACE TABLE JOB_SNOWFLAKE_OBJECT_REFERENCE (
@@ -128,13 +144,16 @@ CREATE OR REPLACE TABLE JOB_SNOWFLAKE_OBJECT_REFERENCE (
 BEGIN TRANSACTION NAME t1;
 
     INSERT INTO JOB_SNOWFLAKE_OBJECT_REFERENCE (tables_name, stages_name, files_format_name, related_sp_name, job_master_reference_id) 
-     VALUES ('T_SERVER_STG', 'T_SERVER_STG_S3', 'FILE_T_SERVER_STG_S3', 'SPW_T_SERVER', 1);
+     VALUES ('T_SERVER_STG', 'T_STG_S3','FILE_T_STG_S3','SPW_T_SERVER',1);
+     
+    INSERT INTO JOB_SNOWFLAKE_OBJECT_REFERENCE (tables_name, stages_name, files_format_name, related_sp_name, job_master_reference_id) 
+     VALUES ('T_DEVICE_TOPOLOGY_STG', 'T_STG_S3','FILE_T_STG_S3','SPW_DEVICE_TOPOLOGY', 2);
     
 COMMIT;
 
 SELECT * FROM JOB_SNOWFLAKE_OBJECT_REFERENCE;
 
--- 6.- Logic could go into a Stored Procedure
+-- 6.- Logic could go into a Stored Procedure 
 CREATE OR REPLACE TABLE T_SERVER AS 
 SELECT substr(parse_json($1):Id, 0, LEN(parse_json($1):Id)) AS Id,
        substr(parse_json($1):Data_Type, 0, LEN(parse_json($1):Data_Type)) AS Data_Type,
@@ -175,15 +194,46 @@ SELECT substr(parse_json($1):Id, 0, LEN(parse_json($1):Id)) AS Id,
        substr(parse_json($1):SerialNumber, 0, LEN(parse_json($1):SerialNumber)) AS SerialNumber
 FROM T_SERVER_STG;
 
+CREATE OR REPLACE TABLE T_DEVICE_TOPOLOGY AS 
+SELECT substr(parse_json($1):RelationshipId, 0, LEN(parse_json($1):RelationshipId)) AS RelationshipId,
+       substr(parse_json($1):CI_Name, 0, LEN(parse_json($1):CI_Name)) AS CI_Name,
+       substr(parse_json($1):Absolute_CI_Name, 0, LEN(parse_json($1):Absolute_CI_Name)) AS Absolute_CI_Name,
+       substr(parse_json($1):CI_RejectFlag, 0, LEN(parse_json($1):CI_RejectFlag)) AS CI_RejectFlag,
+       substr(parse_json($1):Class_Desc, 0, LEN(parse_json($1):Class_Desc)) AS Class_Desc,
+       substr(parse_json($1):Topo_Class, 0, LEN(parse_json($1):Topo_Class)) AS Topo_Class,
+       substr(parse_json($1):Operation, 0, LEN(parse_json($1):Operation)) AS Operation,
+       substr(parse_json($1):From_SysName, 0, LEN(parse_json($1):From_SysName)) AS From_SysName,
+       substr(parse_json($1):FromPort, 0, LEN(parse_json($1):FromPort)) AS FromPort,
+       substr(parse_json($1):To_SysName, 0, LEN(parse_json($1):To_SysName)) AS To_SysName,
+       substr(parse_json($1):ToPort, 0, LEN(parse_json($1):ToPort)) AS ToPort,
+       substr(parse_json($1):FromIP, 0, LEN(parse_json($1):FromIP)) AS FromIP,
+       substr(parse_json($1):FromIP_RejectFlag, 0, LEN(parse_json($1):FromIP_RejectFlag)) AS FromIP_RejectFlag,
+       substr(parse_json($1):ToIP, 0, LEN(parse_json($1):ToIP)) AS ToIP,
+       substr(parse_json($1):ToIP_RejectFlag, 0, LEN(parse_json($1):ToIP_RejectFlag)) AS ToIP_RejectFlag,
+       substr(parse_json($1):RelationshipCategory, 0, LEN(parse_json($1):RelationshipCategory)) AS RelationshipCategory,
+       substr(parse_json($1):RelationshipType, 0, LEN(parse_json($1):RelationshipType)) AS RelationshipType,
+       substr(parse_json($1):Source, 0, LEN(parse_json($1):Source)) AS Source,
+       substr(parse_json($1):PayloadType, 0, LEN(parse_json($1):PayloadType)) AS PayloadType,
+       substr(parse_json($1):CreatedBy, 0, LEN(parse_json($1):CreatedBy)) AS CreatedBy,
+       substr(parse_json($1):CreatedDate, 0, LEN(parse_json($1):CreatedDate)) AS CreatedDate,
+       substr(parse_json($1):UpdatedBy, 0, LEN(parse_json($1):UpdatedBy)) AS UpdatedBy,
+       substr(parse_json($1):UpdatedDate, 0, LEN(parse_json($1):UpdatedDate)) AS UpdatedDate
+FROM T_DEVICE_TOPOLOGY_STG;
+
+-- SCHEMA LUIS_METADATA
 USE SCHEMA LUIS_METADATA;
 TRUNCATE TABLE JOB_MASTER_LOADER;
 SELECT * FROM JOB_MASTER_LOADER;
 
+-- SCHEMA LUIS_DATALAKE
 USE SCHEMA LUIS_DATALAKE;
   
 TRUNCATE TABLE T_SERVER;
 SELECT * FROM T_SERVER;
+TRUNCATE TABLE T_DEVICE_TOPOLOGY;
+SELECT * FROM T_DEVICE_TOPOLOGY;
 
 TRUNCATE TABLE T_SERVER_STG;
 SELECT * FROM T_SERVER_STG;
-
+TRUNCATE TABLE T_DEVICE_TOPOLOGY_STG;
+SELECT * FROM T_DEVICE_TOPOLOGY_STG;

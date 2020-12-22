@@ -2,6 +2,8 @@ USE TALENDTEST;
 USE WAREHOUSE TALEND_XS;
 USE SCHEMA LUIS_DATALAKE;
 
+-- 1.- SPW_T_SERVER
+
 CREATE OR REPLACE PROCEDURE SPW_T_SERVER(FILENAME STRING)
 RETURNS VARCHAR
 LANGUAGE JAVASCRIPT
@@ -70,12 +72,64 @@ $$
 $$
 ;
 
-TRUNCATE TABLE T_SERVER;
-SELECT * FROM T_SERVER;
 
 CALL SPW_T_SERVER('Server/2020/11/11/Server_202011061349.json');
 
-SELECT file_name, COUNT(*)
-FROM T_SERVER_STG
-GROUP BY file_name
-WHERE file_name = 'Server/2020/11/11/Server_202011061349.json'
+-- 2.- 
+
+CREATE OR REPLACE PROCEDURE SPW_DEVICE_TOPOLOGY(FILENAME STRING)
+RETURNS VARCHAR
+LANGUAGE JAVASCRIPT
+AS     
+$$
+    try{
+
+    // 01- Setting up operation variables
+    var cmd, stmt, result_set1, result, file_name
+    
+    file_name = FILENAME
+      
+    // 04- Inserting data
+    cmd = "INSERT INTO T_DEVICE_TOPOLOGY\
+           SELECT substr(parse_json($1):RelationshipId, 0, LEN(parse_json($1):RelationshipId)) AS RelationshipId,\
+                  substr(parse_json($1):CI_Name, 0, LEN(parse_json($1):CI_Name)) AS CI_Name,\
+                  substr(parse_json($1):Absolute_CI_Name, 0, LEN(parse_json($1):Absolute_CI_Name)) AS Absolute_CI_Name,\
+                  substr(parse_json($1):CI_RejectFlag, 0, LEN(parse_json($1):CI_RejectFlag)) AS CI_RejectFlag,\
+                  substr(parse_json($1):Class_Desc, 0, LEN(parse_json($1):Class_Desc)) AS Class_Desc,\
+                  substr(parse_json($1):Topo_Class, 0, LEN(parse_json($1):Topo_Class)) AS Topo_Class,\
+                  substr(parse_json($1):Operation, 0, LEN(parse_json($1):Operation)) AS Operation,\
+                  substr(parse_json($1):From_SysName, 0, LEN(parse_json($1):From_SysName)) AS From_SysName,\
+                  substr(parse_json($1):FromPort, 0, LEN(parse_json($1):FromPort)) AS FromPort,\
+                  substr(parse_json($1):To_SysName, 0, LEN(parse_json($1):To_SysName)) AS To_SysName,\
+                  substr(parse_json($1):ToPort, 0, LEN(parse_json($1):ToPort)) AS ToPort,\
+                  substr(parse_json($1):FromIP, 0, LEN(parse_json($1):FromIP)) AS FromIP,\
+                  substr(parse_json($1):FromIP_RejectFlag, 0, LEN(parse_json($1):FromIP_RejectFlag)) AS FromIP_RejectFlag,\
+                  substr(parse_json($1):ToIP, 0, LEN(parse_json($1):ToIP)) AS ToIP,\
+                  substr(parse_json($1):ToIP_RejectFlag, 0, LEN(parse_json($1):ToIP_RejectFlag)) AS ToIP_RejectFlag,\
+                  substr(parse_json($1):RelationshipCategory, 0, LEN(parse_json($1):RelationshipCategory)) AS RelationshipCategory,\
+                  substr(parse_json($1):RelationshipType, 0, LEN(parse_json($1):RelationshipType)) AS RelationshipType,\
+                  substr(parse_json($1):Source, 0, LEN(parse_json($1):Source)) AS Source,\
+                  substr(parse_json($1):PayloadType, 0, LEN(parse_json($1):PayloadType)) AS PayloadType,\
+                  substr(parse_json($1):CreatedBy, 0, LEN(parse_json($1):CreatedBy)) AS CreatedBy,\
+                  substr(parse_json($1):CreatedDate, 0, LEN(parse_json($1):CreatedDate)) AS CreatedDate,\
+                  substr(parse_json($1):UpdatedBy, 0, LEN(parse_json($1):UpdatedBy)) AS UpdatedBy,\
+                  substr(parse_json($1):UpdatedDate, 0, LEN(parse_json($1):UpdatedDate)) AS UpdatedDate\
+          FROM T_DEVICE_TOPOLOGY_STG\
+          WHERE file_name = :1\
+          "
+
+    stmt = snowflake.createStatement({sqlText: cmd, binds: [file_name]});
+    result_set1 = stmt.execute();
+    
+    result =  "COMPLETED SUCCESSFULLY!";
+  } catch(err)
+  {
+    result = "FAILED " + err;
+    var time_st = snowflake.execute( {sqlText: "SELECT CURRENT_TIMESTAMP;"} );
+  }
+  return result
+$$
+;
+
+
+CALL SPW_DEVICE_TOPOLOGY('OTHER');
