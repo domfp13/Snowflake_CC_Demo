@@ -6,9 +6,6 @@ USE DATABASE EBS;
 USE SCHEMA EBS_ARCHIVE;
 USE WAREHOUSE BI_WH_XS;
 
-PUT file:////Users/enriquep/Downloads/AP_HOLD_CODES.csv @STAGE_AP_HOLD_CODES;
-
-
 -- 1.- Creating Internal Stage
 CREATE OR REPLACE STAGE STAGE_AP_HOLD_CODES
   FILE_FORMAT = TEST_CSV;
@@ -44,4 +41,3 @@ from @STAGE_AP_HOLD_CODES (file_format => 'TEST_CSV', PATTERN => '.*.gz') t)
   PATTERN = '.*.gz'
   ON_ERROR = 'skip_file'
   PURGE = FALSE;
-
